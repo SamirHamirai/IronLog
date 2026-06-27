@@ -64,6 +64,7 @@
   .tagline{ font-size:12px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.18em; margin-top:4px; }
 
   .offline-banner{ margin:14px 20px 0; padding:10px 12px; background:var(--danger-soft); border:1px solid rgba(255,77,77,0.35); border-radius:var(--radius-sm); font-size:12.5px; color:#FFB3B3; }
+  .notif-banner{ margin:14px 20px 0; padding:12px 14px; background:var(--bg-raised); border:1px solid var(--line-soft); border-radius:var(--radius-sm); font-size:12.5px; color:var(--text-dim); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 
   .week-strip{ display:flex; gap:6px; margin:18px 20px 4px; }
   .week-pip{ flex:1; height:5px; border-radius:4px; background:var(--line); }
@@ -396,7 +397,6 @@ function exerciseAllDone(sess, exId){
   if(!ex || !ex.sets.length) return false;
   return ex.sets.every(s=>s.done);
 }
-
 /* ---- progress chart ---- */
 function exerciseSeries(dayKey, exId){
   const hist = state.history[dayKey] || [];
@@ -583,6 +583,35 @@ function beep(){
   }catch(e){}
 }
 function buzz(){ try{ if(navigator.vibrate) navigator.vibrate([300,100,300]); }catch(e){} }
+
+/* ================= REST NOTIFICATIONS ================= */
+// Best-effort: lets the rest timer alert you even if you've locked your phone
+// or switched apps. Requires hosting over https (won't work from file:// or
+// inside Claude's artifact viewer) and won't be 100% guaranteed on every OS —
+// iOS in particular suspends background web-page JS more aggressively than
+// Android, so a very long lock during rest may still deliver the alert late.
+function notifSupported(){ return typeof Notification !== 'undefined'; }
+function requestNotifPermission(){
+  if(!notifSupported()){ window.alert('Notifications are not supported in this browser.'); return; }
+  Notification.requestPermission().then(()=>{ render(); }).catch(()=>{});
+}
+function notifyRestOver(label){
+  if(!notifSupported() || Notification.permission !== 'granted') return;
+  // skip if you're already looking at the in-app drawer/sound/vibration
+  if(document.visibilityState === 'visible' && document.hasFocus()) return;
+  const title = 'Rest over';
+  const opts = { body: (label || 'Set') + ' — back to it', icon:'icon-192.png', badge:'icon-192.png', tag:'ironlog-rest', renotify:true };
+  try{
+    if(navigator.serviceWorker && navigator.serviceWorker.getRegistration){
+      navigator.serviceWorker.getRegistration().then(reg=>{
+        if(reg) reg.showNotification(title, opts);
+        else new Notification(title, opts);
+      }).catch(()=>{ try{ new Notification(title, opts); }catch(e){} });
+    } else {
+      new Notification(title, opts);
+    }
+  }catch(e){}
+}
 
 /* ================= SESSION MGMT ================= */
 function emptySession(dayKey){
@@ -820,6 +849,7 @@ function tickRest(){
   if(remaining <= 0 && !state.timer.alarmed){
     state.timer.alarmed = true;
     beep(); buzz();
+    notifyRestOver(state.timer.label);
     if(ring) ring.classList.add('alert');
     setTimeout(()=>{ stopRestTimer(true); }, 2200);
   }
@@ -981,6 +1011,11 @@ function renderHome(){
       <div class="tagline">Weekly training log</div>
     </div>
     ${storageOk ? '' : '<div class="offline-banner">This browser is blocking storage (e.g. private mode) — progress won\'t be saved between visits. Use Backup below to keep a copy.</div>'}
+    ${(notifSupported() && Notification.permission === 'default') ? `
+      <div class="notif-banner">
+        <span>🔔 Get notified when your rest timer ends, even if your screen locks.</span>
+        <button class="btn btn--primary btn--sm" onclick="requestNotifPermission()">Enable</button>
+      </div>` : ''}
     <div class="week-strip">${pips}</div>
     <div class="week-label">This week</div>
     <div class="day-list">${cards}</div>
