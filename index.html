@@ -87,6 +87,36 @@
 
   /* ---------- Topbar (day view) ---------- */
   .topbar{ display:flex; align-items:center; gap:12px; padding:18px 16px 12px; }
+
+  /* ---------- Sticky collapsed day header ---------- */
+  .sticky-bar{
+    position:fixed; top:0; left:0; right:0; max-width:560px; margin:0 auto;
+    z-index:25; padding:10px 16px 10px;
+    background:rgba(17,17,20,0.92); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line-soft);
+    display:flex; align-items:center; gap:12px;
+    transform:translateY(-110%); opacity:0;
+    transition:transform .22s cubic-bezier(.2,.8,.2,1), opacity .18s ease;
+    pointer-events:none;
+  }
+  .sticky-bar.visible{ transform:translateY(0); opacity:1; pointer-events:auto; }
+  .sticky-bar__back{ width:34px; height:34px; border-radius:9px; background:var(--bg-raised); display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+  .sticky-bar__info{ flex:1; min-width:0; }
+  .sticky-bar__title{ font-family:var(--font-display); font-size:18px; line-height:1; letter-spacing:0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sticky-bar__sub{ font-size:11px; color:var(--text-dim); margin-top:2px; }
+  .sticky-bar__timer{
+    flex-shrink:0; width:56px; height:56px; border-radius:50%;
+    border:2.5px solid var(--line);
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    position:relative; overflow:hidden;
+  }
+  .sticky-bar__timer.running{ border-color:var(--accent); }
+  .sticky-bar__timer.over{ border-color:var(--danger); }
+  .sticky-bar__timer-digits{ font-family:var(--font-mono); font-size:11px; font-weight:700; line-height:1; }
+  .sticky-bar__timer-label{ font-size:7.5px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.06em; margin-top:2px; }
+  .sticky-bar__timer svg{ position:absolute; top:0; left:0; width:100%; height:100%; transform:rotate(-90deg); }
+  .sticky-bar__timer-track{ fill:none; stroke:var(--line); stroke-width:3; }
+  .sticky-bar__timer-fg{ fill:none; stroke:var(--accent); stroke-width:3; stroke-linecap:round; transition:stroke-dashoffset .9s linear; }
   .back-btn{ width:38px; height:38px; border-radius:10px; background:var(--bg-raised); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
   .topbar__main{ flex:1; min-width:0; }
   .topbar__title{ font-size:24px; line-height:1; }
@@ -643,9 +673,31 @@ async function openDay(dayKey){
   state.session = draft || emptySession(dayKey);
   if(state.session.startedAt) startStopwatch();
   render();
+  window.scrollTo(0, 0);
+  // attach scroll listener after render so stickyBar node exists
+  (typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : setTimeout)(initStickyScroll, 0);
+}
+let _stickyScrollHandler = null;
+function initStickyScroll(){
+  if(_stickyScrollHandler) window.removeEventListener('scroll', _stickyScrollHandler);
+  const THRESHOLD = 80; // px — how far you scroll before sticky snaps in
+  _stickyScrollHandler = ()=>{
+    const bar = document.getElementById('stickyBar');
+    if(!bar) return;
+    if(window.scrollY > THRESHOLD) bar.classList.add('visible');
+    else bar.classList.remove('visible');
+  };
+  window.addEventListener('scroll', _stickyScrollHandler, { passive:true });
+}
+function teardownStickyScroll(){
+  if(_stickyScrollHandler){ window.removeEventListener('scroll', _stickyScrollHandler); _stickyScrollHandler = null; }
+  const bar = document.getElementById('stickyBar');
+  if(bar) bar.classList.remove('visible');
 }
 function goHome(){
   stopStopwatch(); stopRestTimer(true);
+  teardownStickyScroll();
+  window.scrollTo(0, 0);
   state.view = 'home';
   state.day = null;
   state.session = null;
@@ -672,12 +724,29 @@ function tickStopwatch(){
   if(!el) return;
   const elapsedSec = (Date.now() - state.session.startedAt)/1000;
   const mins = Math.floor(elapsedSec/60);
-  el.textContent = fmtClock(elapsedSec);
+  const timeStr = fmtClock(elapsedSec);
+  el.textContent = timeStr;
   if(paceEl){
     const range = state.plan[state.day].duration.match(/(\d+).+?(\d+)/);
     const upper = range ? parseInt(range[2],10) : null;
     if(upper && mins > upper){ paceEl.textContent = 'over target window'; paceEl.classList.add('over'); }
     else { paceEl.textContent = 'target ' + state.plan[state.day].duration; paceEl.classList.remove('over'); }
+  }
+  // also update the sticky collapsed bar
+  const stickyDigits = document.getElementById('stickyTimerDigits');
+  if(stickyDigits) stickyDigits.textContent = timeStr;
+  const stickyRing = document.getElementById('stickyTimerRing');
+  const stickyWrap = document.getElementById('stickyTimerWrap');
+  if(stickyRing){
+    const range = state.plan[state.day].duration.match(/(\d+).+?(\d+)/);
+    const upper = range ? parseInt(range[2],10) : null;
+    const C = 2*Math.PI*25;
+    const frac = upper ? Math.min(1, elapsedSec / (upper*60)) : 0;
+    stickyRing.style.strokeDashoffset = String(C * (1 - frac));
+    if(upper && mins > upper){
+      stickyRing.style.stroke = 'var(--danger)';
+      if(stickyWrap) stickyWrap.classList.add('over');
+    }
   }
 }
 
@@ -972,6 +1041,11 @@ function render(){
   if(state.view === 'home') app.innerHTML = renderHome();
   else if(state.view === 'day') app.innerHTML = renderDay();
   else if(state.view === 'summary') app.innerHTML = renderDay() + renderSummary();
+  // after any day-view re-render, re-apply sticky state based on current scroll
+  if(state.view === 'day' || state.view === 'summary'){
+    const bar = document.getElementById('stickyBar');
+    if(bar && window.scrollY > 80) bar.classList.add('visible');
+  }
 }
 
 function renderHome(){
@@ -1192,7 +1266,32 @@ function renderDay(){
     </div>`;
   }).join('') : '<div class="hist-empty">No past sessions logged yet.</div>';
 
+  const targetSec = (()=>{
+    const m = day.duration.match(/(\d+).+?(\d+)/);
+    return m ? parseInt(m[2],10)*60 : null;
+  })();
+  const C_STICKY = 2*Math.PI*25; // circumference for r=25 in 56px circle
+
   return `
+    <div class="sticky-bar" id="stickyBar">
+      <button class="sticky-bar__back" onclick="goHome()">←</button>
+      <span class="sticky-bar__info">
+        <div class="sticky-bar__title">${day.name} — ${day.title}</div>
+        <div class="sticky-bar__sub">Target ${day.duration}</div>
+      </span>
+      <span class="sticky-bar__timer ${started?'running':''}" id="stickyTimerWrap">
+        <svg viewBox="0 0 56 56">
+          <circle class="sticky-bar__timer-track" cx="28" cy="28" r="25"></circle>
+          <circle class="sticky-bar__timer-fg" id="stickyTimerRing" cx="28" cy="28" r="25"
+            stroke-dasharray="${C_STICKY}"
+            stroke-dashoffset="${started && targetSec ? Math.max(0, C_STICKY*(1 - (Date.now()-session.startedAt)/1000/targetSec)) : C_STICKY}">
+          </circle>
+        </svg>
+        <span class="sticky-bar__timer-digits" id="stickyTimerDigits">${started ? fmtClock((Date.now()-session.startedAt)/1000) : '0:00'}</span>
+        <span class="sticky-bar__timer-label">${started ? 'elapsed' : 'ready'}</span>
+      </span>
+    </div>
+
     <div class="topbar">
       <button class="back-btn" onclick="goHome()">←</button>
       <span class="topbar__main">
