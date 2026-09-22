@@ -297,10 +297,59 @@ const PLAN_SEED = {
     { id:'dips',          name:'Dips',           rest:120, sets:3, failure:false },
   ]},
 
-  // New splits below start empty — add exercises from within a day via Edit → + Add exercise.
-  'split3-day1': { name:'Day 1', title:'Add exercises', duration:'—', exercises:[] },
-  'split3-day2': { name:'Day 2', title:'Add exercises', duration:'—', exercises:[] },
-  'split3-day3': { name:'Day 3', title:'Add exercises', duration:'—', exercises:[] },
+  // 3-Day Split: A/B week rotation, 3 sessions per week (Mon/Wed/Fri)
+  'split3-a-monday': { name:'Monday', title:'Upper A – Push', duration:'60–70 min', exercises:[
+    { id:'a-mon-incline-bench',  name:'Incline Bench Press',   rest:120, sets:3, failure:false, reps:'5–8' },
+    { id:'a-mon-ohp',            name:'Overhead Press',        rest:120, sets:3, failure:false, reps:'5–8' },
+    { id:'a-mon-bb-row',         name:'Barbell Row',           rest:90,  sets:3, failure:false, reps:'8–12' },
+    { id:'a-mon-lat-pulldown',   name:'Lat Pulldown',          rest:90,  sets:3, failure:false, reps:'8–12' },
+    { id:'a-mon-lat-raise',      name:'Lateral Raise',         rest:60,  sets:3, failure:true,  reps:'10–15' },
+    { id:'a-mon-oh-tricep-ext',  name:'Overhead Tricep Ext',   rest:75,  sets:3, failure:false, reps:'10–15' },
+    { id:'a-mon-face-pull',      name:'Face Pull',             rest:60,  sets:3, failure:false, reps:'10–15' },
+  ]},
+  'split3-a-wednesday': { name:'Wednesday', title:'Lower A – Quads', duration:'50–60 min', exercises:[
+    { id:'a-wed-squat',          name:'Squat',                 rest:180, sets:3, failure:false, reps:'5–8' },
+    { id:'a-wed-rdl',            name:'RDL',                   rest:120, sets:3, failure:false, reps:'8–12' },
+    { id:'a-wed-leg-ext',        name:'Leg Extension',         rest:90,  sets:3, failure:true,  reps:'10–15' },
+    { id:'a-wed-lying-leg-curl', name:'Lying Leg Curl',        rest:90,  sets:3, failure:true,  reps:'10–15' },
+    { id:'a-wed-calf-raise',     name:'Calf Raises',           rest:60,  sets:3, failure:true,  reps:'10–15' },
+    { id:'a-wed-hanging-leg-raise', name:'Hanging Leg Raise',  rest:60,  sets:3, failure:false, reps:'10–15' },
+  ]},
+  'split3-a-friday': { name:'Friday', title:'Upper B – Pull', duration:'55–65 min', exercises:[
+    { id:'a-fri-flat-bench',     name:'Flat Bench Press',      rest:120, sets:3, failure:false, reps:'5–8' },
+    { id:'a-fri-pullup-latpulldown', name:'Pull-ups / Lat Pulldown', rest:120, sets:3, failure:false, reps:'5–8' },
+    { id:'a-fri-cs-row',         name:'Chest Supported Row',   rest:90,  sets:3, failure:false, reps:'8–12' },
+    { id:'a-fri-cable-fly',      name:'Cable Fly',             rest:60,  sets:3, failure:true,  reps:'10–15' },
+    { id:'a-fri-lat-raise-light',name:'Lateral Raise (Light)', rest:60,  sets:2, failure:false, reps:'12–15' },
+    { id:'a-fri-bicep-curl',     name:'Bicep Curls',           rest:75,  sets:3, failure:true,  reps:'10–15' },
+    { id:'a-fri-face-pull',      name:'Face Pull',             rest:60,  sets:3, failure:false, reps:'10–15' },
+  ]},
+  'split3-b-monday': { name:'Monday', title:'Lower B – Hinge', duration:'50–60 min', exercises:[
+    { id:'b-mon-rdl-heavy',      name:'RDL Heavy',             rest:180, sets:3, failure:false, reps:'5–8' },
+    { id:'b-mon-bulgarian-split-squat', name:'Bulgarian Split Squat', rest:120, sets:3, failure:false, reps:'8–12' },
+    { id:'b-mon-leg-ext',        name:'Leg Extension',         rest:90,  sets:3, failure:true,  reps:'10–15' },
+    { id:'b-mon-lying-leg-curl', name:'Lying Leg Curl',        rest:90,  sets:3, failure:true,  reps:'10–15' },
+    { id:'b-mon-calf-raise',     name:'Calf Raises',           rest:60,  sets:3, failure:true,  reps:'10–15' },
+    { id:'b-mon-plank',          name:'Plank',                 rest:60,  sets:3, failure:false, reps:'30–60 sec hold' },
+  ]},
+  'split3-b-wednesday': { name:'Wednesday', title:'Upper C – Arms & Shoulders', duration:'60–70 min', exercises:[
+    { id:'b-wed-ohp',            name:'Overhead Press',        rest:120, sets:3, failure:false, reps:'5–8' },
+    { id:'b-wed-bb-row',         name:'Barbell Row',           rest:90,  sets:3, failure:false, reps:'8–12' },
+    { id:'b-wed-close-grip-bench', name:'Close Grip Bench',    rest:90,  sets:3, failure:false, reps:'8–12' },
+    { id:'b-wed-incline-curl',   name:'Incline Curl',          rest:75,  sets:3, failure:true,  reps:'10–15' },
+    { id:'b-wed-hammer-curl',    name:'Hammer Curl',           rest:60,  sets:3, failure:true,  reps:'10–15' },
+    { id:'b-wed-pushdown',       name:'Pushdown',              rest:60,  sets:3, failure:false, reps:'10–15' },
+    { id:'b-wed-lat-raise',      name:'Lateral Raise',         rest:60,  sets:3, failure:true,  reps:'10–15' },
+    { id:'b-wed-reverse-pec-deck', name:'Reverse Pec Deck',    rest:60,  sets:3, failure:false, reps:'12–15' },
+  ]},
+  'split3-b-friday': { name:'Friday', title:'Lower C – Full Lower', duration:'55–65 min', exercises:[
+    { id:'b-fri-squat',          name:'Squat',                 rest:180, sets:3, failure:false, reps:'5–8' },
+    { id:'b-fri-bulgarian-split-squat', name:'Bulgarian Split Squat', rest:120, sets:3, failure:false, reps:'8–12' },
+    { id:'b-fri-leg-press',      name:'Leg Press',             rest:120, sets:3, failure:false, reps:'10–15' },
+    { id:'b-fri-lying-leg-curl', name:'Lying Leg Curl',        rest:90,  sets:3, failure:true,  reps:'10–15' },
+    { id:'b-fri-calf-raise',     name:'Calf Raises',           rest:60,  sets:3, failure:true,  reps:'10–15' },
+    { id:'b-fri-cable-crunch',   name:'Cable Crunch / Ab Crunch', rest:60, sets:3, failure:false, reps:'12–15' },
+  ]},
 
   'cardio-session1': { name:'Cardio', title:'Add exercises', duration:'—', exercises:[] },
 
@@ -312,13 +361,25 @@ const PLAN_SEED = {
    works identically for every split. */
 const SPLITS = [
   { id:'cardio',   label:'Cardio',                blurb:'Steady-state & interval conditioning', dayOrder:['cardio-session1'] },
-  { id:'split3',   label:'3-Day Split',            blurb:'Full-body / rotating 3-day plan',      dayOrder:['split3-day1','split3-day2','split3-day3'] },
+  { id:'split3',   label:'3-Day Split',            blurb:'A/B week rotation, 3 sessions a week', weeks:[
+      { id:'weekA', label:'Week A', dayOrder:['split3-a-monday','split3-a-wednesday','split3-a-friday'] },
+      { id:'weekB', label:'Week B', dayOrder:['split3-b-monday','split3-b-wednesday','split3-b-friday'] },
+    ]},
   { id:'split5',   label:'5-Day Split',            blurb:'One muscle group per day',             dayOrder:['monday','tuesday','wednesday','thursday','friday'] },
   { id:'mobility', label:'Stretching & Mobility',  blurb:'Recovery, flexibility, mobility work',  dayOrder:['mobility-session1'] },
 ];
-const ALL_DAY_KEYS = SPLITS.flatMap(s => s.dayOrder);
+function splitDayKeys(s){ return s.weeks ? s.weeks.flatMap(w => w.dayOrder) : s.dayOrder; }
+const ALL_DAY_KEYS = SPLITS.flatMap(splitDayKeys);
 function currentSplit(){ return SPLITS.find(s => s.id === state.split) || SPLITS[0]; }
-function currentDayOrder(){ return currentSplit().dayOrder; }
+function currentWeek(){
+  const s = currentSplit();
+  if(!s.weeks) return null;
+  return s.weeks.find(w => w.id === state.week) || s.weeks[0];
+}
+function currentDayOrder(){
+  const s = currentSplit();
+  return s.weeks ? currentWeek().dayOrder : s.dayOrder;
+}
 
 /* ================= STORAGE ================= */
 // Storage priority: Claude's window.storage (when running as a Claude artifact)
@@ -378,8 +439,9 @@ async function setJSON(key, obj){ await storeSet(key, JSON.stringify(obj)); }
 
 /* ================= STATE ================= */
 const state = {
-  view: 'splits',        // 'splits' (landing) -> 'home' (day list for the chosen split) -> 'day' / 'summary'
+  view: 'splits',        // 'splits' (landing) -> 'weeks' (only for splits with A/B weeks) -> 'home' (day list) -> 'day' / 'summary'
   split: null,           // currently chosen split id, e.g. 'split5'
+  week: null,            // currently chosen week id, e.g. 'weekA' (only used by splits that define `weeks`)
   day: null,
   plan: null,            // dayKey -> {name,title,duration,exercises:[...]} -- mutable, persisted (seeded from PLAN_SEED on first run), flat across all splits since day keys are globally unique
   history: {},        // dayKey -> array of sessions
@@ -728,10 +790,28 @@ function goHome(){
   render();
 }
 function selectSplit(splitId){
+  const s = SPLITS.find(x => x.id === splitId);
   state.split = splitId;
+  state.week = null;
+  state.view = s.weeks ? 'weeks' : 'home';
+  window.scrollTo(0, 0);
+  render();
+}
+function selectWeek(weekId){
+  state.week = weekId;
   state.view = 'home';
   window.scrollTo(0, 0);
   render();
+}
+function goBackFromHome(){
+  if(currentSplit().weeks){
+    state.view = 'weeks';
+    state.week = null;
+    window.scrollTo(0, 0);
+    render();
+  } else {
+    goSplits();
+  }
 }
 function goSplits(){
   stopStopwatch(); stopRestTimer(true);
@@ -739,6 +819,7 @@ function goSplits(){
   window.scrollTo(0, 0);
   state.view = 'splits';
   state.split = null;
+  state.week = null;
   state.day = null;
   state.session = null;
   render();
@@ -907,14 +988,18 @@ function cancelAddExercise(){
 }
 function confirmAddExercise(){
   const nameInput = document.getElementById('newExName');
+  const repsInput = document.getElementById('newExReps');
   const restInput = document.getElementById('newExRest');
   const failInput = document.getElementById('newExFailure');
   const name = (nameInput.value || '').trim();
   if(!name){ nameInput.focus(); return; }
+  const reps = (repsInput.value || '').trim();
   const rest = Math.max(10, parseInt(restInput.value, 10) || 90);
   const failure = !!failInput.checked;
   const id = 'custom-' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-  state.plan[state.day].exercises.push({ id, name, rest, sets:3, failure });
+  const newEx = { id, name, rest, sets:3, failure };
+  if(reps) newEx.reps = reps;
+  state.plan[state.day].exercises.push(newEx);
   persistPlan();
   state.addingExercise = false;
   state.session = emptySession(state.day);
@@ -1079,6 +1164,7 @@ async function handleImportBackup(evt){
 function render(){
   const app = document.getElementById('app');
   if(state.view === 'splits') app.innerHTML = renderSplits();
+  else if(state.view === 'weeks') app.innerHTML = renderWeeks();
   else if(state.view === 'home') app.innerHTML = renderHome();
   else if(state.view === 'day') app.innerHTML = renderDay();
   else if(state.view === 'summary') app.innerHTML = renderDay() + renderSummary();
@@ -1091,7 +1177,11 @@ function render(){
 
 function renderSplits(){
   const cards = SPLITS.map((s, i)=>{
-    const totalEx = s.dayOrder.reduce((sum, dk)=> sum + (state.plan[dk]?.exercises.length || 0), 0);
+    const keys = splitDayKeys(s);
+    const totalEx = keys.reduce((sum, dk)=> sum + (state.plan[dk]?.exercises.length || 0), 0);
+    const countLabel = s.weeks
+      ? `${s.weeks.length} weeks · ${keys.length} sessions`
+      : `${keys.length} day${keys.length>1?'s':''}`;
     return `
       <button class="day-card" onclick="selectSplit('${s.id}')">
         <span class="day-card__idx">0${i+1}</span>
@@ -1103,7 +1193,7 @@ function renderSplits(){
             <span>${s.blurb}</span>
           </span>
           <span class="day-card__meta">
-            <span>${s.dayOrder.length} day${s.dayOrder.length>1?'s':''}</span>
+            <span>${countLabel}</span>
             <span>·</span>
             <span>${totalEx} exercise${totalEx===1?'':'s'} set up</span>
           </span>
@@ -1134,9 +1224,43 @@ function renderSplits(){
   `;
 }
 
+function renderWeeks(){
+  const s = currentSplit();
+  const cards = s.weeks.map((w, i)=>{
+    const totalEx = w.dayOrder.reduce((sum, dk)=> sum + (state.plan[dk]?.exercises.length || 0), 0);
+    return `
+      <button class="day-card" onclick="selectWeek('${w.id}')">
+        <span class="day-card__idx">0${i+1}</span>
+        <span class="day-card__main">
+          <span class="day-card__top">
+            <span class="day-card__title">${w.label}</span>
+          </span>
+          <span class="day-card__meta">
+            <span>${w.dayOrder.length} days</span>
+            <span>·</span>
+            <span>${totalEx} exercises set up</span>
+          </span>
+        </span>
+        <span class="day-card__chev">›</span>
+      </button>`;
+  }).join('');
+
+  return `
+    <div class="topband">
+      <div class="topband__row">
+        <button class="back-btn" onclick="goSplits()">←</button>
+        <div class="wordmark">IRON<span>LOG</span></div>
+      </div>
+      <div class="tagline">${s.label}</div>
+    </div>
+    <div class="day-list">${cards}</div>
+  `;
+}
+
 function renderHome(){
   const split = currentSplit();
-  const dayOrder = split.dayOrder;
+  const week = currentWeek();
+  const dayOrder = currentDayOrder();
   const { start: wkStart, end: wkEnd } = currentWeekRange();
   const pips = dayOrder.map(dk=>{
     const done = (state.history[dk]||[]).some(s=> s.date >= wkStart && s.date <= wkEnd);
@@ -1170,10 +1294,10 @@ function renderHome(){
   return `
     <div class="topband">
       <div class="topband__row">
-        <button class="back-btn" onclick="goSplits()">←</button>
+        <button class="back-btn" onclick="goBackFromHome()">←</button>
         <div class="wordmark">IRON<span>LOG</span></div>
       </div>
-      <div class="tagline">${split.label}</div>
+      <div class="tagline">${split.label}${week ? ' · ' + week.label : ''}</div>
     </div>
     <div class="week-strip">${pips}</div>
     <div class="week-label">This week</div>
@@ -1190,6 +1314,7 @@ function renderEditList(dayKey){
         <span class="edit-row__name">${ex.name}</span>
         <span class="edit-row__sub">
           <span class="pill">Rest ${fmtClock(ex.rest)}</span>
+          ${ex.reps?`<span class="pill">${ex.reps}</span>`:''}
           ${ex.failure?'<span class="badge-fail">Failure</span>':''}
         </span>
       </span>
@@ -1203,6 +1328,7 @@ function renderEditList(dayKey){
   const addForm = state.addingExercise ? `
     <div class="add-ex-form">
       <input id="newExName" type="text" placeholder="Exercise name" class="add-ex-input" autofocus>
+      <input id="newExReps" type="text" placeholder="Target reps, e.g. 8–12 (optional)" class="add-ex-input">
       <div class="add-ex-row2">
         <select id="newExRest" class="add-ex-select">
           <option value="60">Rest 1:00</option>
@@ -1312,6 +1438,7 @@ function renderDay(){
             <span class="ex-head__name">${ex.name}</span>
             <span class="ex-head__sub">
               <span class="pill">Rest ${fmtClock(ex.rest)}</span>
+              ${ex.reps?`<span class="pill">${ex.reps}</span>`:''}
               ${ex.failure?'<span class="badge-fail">Last set · failure</span>':''}
             </span>
           </span>

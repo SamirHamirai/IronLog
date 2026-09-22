@@ -1,7 +1,7 @@
 // IronLog service worker — caches the app shell so the tracker still opens
 // (and any already-logged data is still readable) without a network connection.
 // Bump CACHE_NAME whenever you redeploy index.html so clients pick up the update.
-const CACHE_NAME = 'ironlog-v2';
+const CACHE_NAME = 'ironlog-v3';
 const ASSETS = [
   './',
   './index.html',
