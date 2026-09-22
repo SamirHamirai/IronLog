@@ -59,6 +59,7 @@
 
   /* ---------- Header / Home ---------- */
   .topband{ padding:28px 20px 6px; }
+  .topband__row{ display:flex; align-items:center; gap:12px; margin-bottom:2px; }
   .wordmark{ font-size:34px; line-height:1; color:var(--text); display:flex; align-items:baseline; gap:8px; }
   .wordmark span{ color:var(--accent); }
   .tagline{ font-size:12px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.18em; margin-top:4px; }
@@ -295,8 +296,29 @@ const PLAN_SEED = {
     { id:'cable-fly',     name:'Cable Fly',      rest:60,  sets:3, failure:true  },
     { id:'dips',          name:'Dips',           rest:120, sets:3, failure:false },
   ]},
+
+  // New splits below start empty — add exercises from within a day via Edit → + Add exercise.
+  'split3-day1': { name:'Day 1', title:'Add exercises', duration:'—', exercises:[] },
+  'split3-day2': { name:'Day 2', title:'Add exercises', duration:'—', exercises:[] },
+  'split3-day3': { name:'Day 3', title:'Add exercises', duration:'—', exercises:[] },
+
+  'cardio-session1': { name:'Cardio', title:'Add exercises', duration:'—', exercises:[] },
+
+  'mobility-session1': { name:'Mobility', title:'Add exercises', duration:'—', exercises:[] },
 };
-const DAY_ORDER = ['monday','tuesday','wednesday','thursday','friday'];
+
+/* Splits shown on the landing page, in display order. Each split just points
+   at a set of keys in PLAN_SEED/state.plan — the day/session view underneath
+   works identically for every split. */
+const SPLITS = [
+  { id:'cardio',   label:'Cardio',                blurb:'Steady-state & interval conditioning', dayOrder:['cardio-session1'] },
+  { id:'split3',   label:'3-Day Split',            blurb:'Full-body / rotating 3-day plan',      dayOrder:['split3-day1','split3-day2','split3-day3'] },
+  { id:'split5',   label:'5-Day Split',            blurb:'One muscle group per day',             dayOrder:['monday','tuesday','wednesday','thursday','friday'] },
+  { id:'mobility', label:'Stretching & Mobility',  blurb:'Recovery, flexibility, mobility work',  dayOrder:['mobility-session1'] },
+];
+const ALL_DAY_KEYS = SPLITS.flatMap(s => s.dayOrder);
+function currentSplit(){ return SPLITS.find(s => s.id === state.split) || SPLITS[0]; }
+function currentDayOrder(){ return currentSplit().dayOrder; }
 
 /* ================= STORAGE ================= */
 // Storage priority: Claude's window.storage (when running as a Claude artifact)
@@ -356,9 +378,10 @@ async function setJSON(key, obj){ await storeSet(key, JSON.stringify(obj)); }
 
 /* ================= STATE ================= */
 const state = {
-  view: 'home',
+  view: 'splits',        // 'splits' (landing) -> 'home' (day list for the chosen split) -> 'day' / 'summary'
+  split: null,           // currently chosen split id, e.g. 'split5'
   day: null,
-  plan: null,            // dayKey -> {name,title,duration,exercises:[...]} -- mutable, persisted (seeded from PLAN_SEED on first run)
+  plan: null,            // dayKey -> {name,title,duration,exercises:[...]} -- mutable, persisted (seeded from PLAN_SEED on first run), flat across all splits since day keys are globally unique
   history: {},        // dayKey -> array of sessions
   setCounts: {},       // exerciseId -> custom set count
   session: null,       // current working session for state.day
@@ -512,12 +535,13 @@ async function init(){
   usingLocalStorage = !usingClaudeStorage && testLocalStorage();
   storageOk = usingClaudeStorage || usingLocalStorage;
   state.setCounts = await getJSON('setcounts', {});
-  state.plan = await getJSON('workout-plan', null);
-  if(!state.plan){
-    state.plan = JSON.parse(JSON.stringify(PLAN_SEED));
-    await setJSON('workout-plan', state.plan);
-  }
-  for(const dk of DAY_ORDER){
+  const savedPlan = await getJSON('workout-plan', null);
+  // Merge onto a fresh copy of the seed so any splits/days added in an update
+  // (like new ones introduced after your last save) show up even for a
+  // returning device, while every day you've already customized keeps your edits.
+  state.plan = Object.assign(JSON.parse(JSON.stringify(PLAN_SEED)), savedPlan || {});
+  await setJSON('workout-plan', state.plan);
+  for(const dk of ALL_DAY_KEYS){
     state.history[dk] = await getJSON('history-'+dk, []);
   }
   render();
@@ -699,6 +723,22 @@ function goHome(){
   teardownStickyScroll();
   window.scrollTo(0, 0);
   state.view = 'home';
+  state.day = null;
+  state.session = null;
+  render();
+}
+function selectSplit(splitId){
+  state.split = splitId;
+  state.view = 'home';
+  window.scrollTo(0, 0);
+  render();
+}
+function goSplits(){
+  stopStopwatch(); stopRestTimer(true);
+  teardownStickyScroll();
+  window.scrollTo(0, 0);
+  state.view = 'splits';
+  state.split = null;
   state.day = null;
   state.session = null;
   render();
@@ -981,7 +1021,7 @@ async function confirmFinish(save){
 /* ================= RESET ================= */
 async function resetAllData(){
   if(!window.confirm('Erase all logged history and progress? This cannot be undone.')) return;
-  for(const dk of DAY_ORDER){ await storeDel('history-'+dk); await storeDel('inprogress-'+dk); state.history[dk] = []; }
+  for(const dk of ALL_DAY_KEYS){ await storeDel('history-'+dk); await storeDel('inprogress-'+dk); state.history[dk] = []; }
   await storeDel('setcounts');
   state.setCounts = {};
   goHome();
@@ -1023,7 +1063,7 @@ async function handleImportBackup(evt){
     if(!window.confirm('Import this backup? It will overwrite your current logged history and settings on this device.')) return;
     if(data.setCounts){ state.setCounts = data.setCounts; await setJSON('setcounts', state.setCounts); }
     if(data.history){
-      for(const dk of DAY_ORDER){
+      for(const dk of ALL_DAY_KEYS){
         state.history[dk] = data.history[dk] || [];
         await setJSON('history-'+dk, state.history[dk]);
       }
@@ -1038,7 +1078,8 @@ async function handleImportBackup(evt){
 /* ================= RENDER ================= */
 function render(){
   const app = document.getElementById('app');
-  if(state.view === 'home') app.innerHTML = renderHome();
+  if(state.view === 'splits') app.innerHTML = renderSplits();
+  else if(state.view === 'home') app.innerHTML = renderHome();
   else if(state.view === 'day') app.innerHTML = renderDay();
   else if(state.view === 'summary') app.innerHTML = renderDay() + renderSummary();
   // after any day-view re-render, re-apply sticky state based on current scroll
@@ -1048,14 +1089,61 @@ function render(){
   }
 }
 
+function renderSplits(){
+  const cards = SPLITS.map((s, i)=>{
+    const totalEx = s.dayOrder.reduce((sum, dk)=> sum + (state.plan[dk]?.exercises.length || 0), 0);
+    return `
+      <button class="day-card" onclick="selectSplit('${s.id}')">
+        <span class="day-card__idx">0${i+1}</span>
+        <span class="day-card__main">
+          <span class="day-card__top">
+            <span class="day-card__title">${s.label}</span>
+          </span>
+          <span class="day-card__meta">
+            <span>${s.blurb}</span>
+          </span>
+          <span class="day-card__meta">
+            <span>${s.dayOrder.length} day${s.dayOrder.length>1?'s':''}</span>
+            <span>·</span>
+            <span>${totalEx} exercise${totalEx===1?'':'s'} set up</span>
+          </span>
+        </span>
+        <span class="day-card__chev">›</span>
+      </button>`;
+  }).join('');
+
+  return `
+    <div class="topband">
+      <div class="wordmark">IRON<span>LOG</span></div>
+      <div class="tagline">Choose your training</div>
+    </div>
+    ${storageOk ? '' : '<div class="offline-banner">This browser is blocking storage (e.g. private mode) — progress won\'t be saved between visits. Use Backup below to keep a copy.</div>'}
+    ${(notifSupported() && Notification.permission === 'default') ? `
+      <div class="notif-banner">
+        <span>🔔 Get notified when your rest timer ends, even if your screen locks.</span>
+        <button class="btn btn--primary btn--sm" onclick="requestNotifPermission()">Enable</button>
+      </div>` : ''}
+    <div class="day-list">${cards}</div>
+    <div class="footer-link-row">
+      <button class="footer-link" onclick="exportBackup()">Backup data</button>
+      <span style="color:var(--text-faint);font-size:11.5px;margin:0 8px;">·</span>
+      <button class="footer-link" onclick="triggerImportBackup()">Restore backup</button>
+      <span style="color:var(--text-faint);font-size:11.5px;margin:0 8px;">·</span>
+      <button class="footer-link" onclick="resetAllData()">Reset all data</button>
+    </div>
+  `;
+}
+
 function renderHome(){
+  const split = currentSplit();
+  const dayOrder = split.dayOrder;
   const { start: wkStart, end: wkEnd } = currentWeekRange();
-  const pips = DAY_ORDER.map(dk=>{
+  const pips = dayOrder.map(dk=>{
     const done = (state.history[dk]||[]).some(s=> s.date >= wkStart && s.date <= wkEnd);
     return '<div class="week-pip '+(done?'done':'')+'"></div>';
   }).join('');
 
-  const cards = DAY_ORDER.map((dk, i)=>{
+  const cards = dayOrder.map((dk, i)=>{
     const day = state.plan[dk];
     const hist = state.history[dk] || [];
     const last = hist.length ? prettyDate(hist[hist.length-1].date) : null;
@@ -1081,25 +1169,15 @@ function renderHome(){
 
   return `
     <div class="topband">
-      <div class="wordmark">IRON<span>LOG</span></div>
-      <div class="tagline">Weekly training log</div>
+      <div class="topband__row">
+        <button class="back-btn" onclick="goSplits()">←</button>
+        <div class="wordmark">IRON<span>LOG</span></div>
+      </div>
+      <div class="tagline">${split.label}</div>
     </div>
-    ${storageOk ? '' : '<div class="offline-banner">This browser is blocking storage (e.g. private mode) — progress won\'t be saved between visits. Use Backup below to keep a copy.</div>'}
-    ${(notifSupported() && Notification.permission === 'default') ? `
-      <div class="notif-banner">
-        <span>🔔 Get notified when your rest timer ends, even if your screen locks.</span>
-        <button class="btn btn--primary btn--sm" onclick="requestNotifPermission()">Enable</button>
-      </div>` : ''}
     <div class="week-strip">${pips}</div>
     <div class="week-label">This week</div>
     <div class="day-list">${cards}</div>
-    <div class="footer-link-row">
-      <button class="footer-link" onclick="exportBackup()">Backup data</button>
-      <span style="color:var(--text-faint);font-size:11.5px;margin:0 8px;">·</span>
-      <button class="footer-link" onclick="triggerImportBackup()">Restore backup</button>
-      <span style="color:var(--text-faint);font-size:11.5px;margin:0 8px;">·</span>
-      <button class="footer-link" onclick="resetAllData()">Reset all data</button>
-    </div>
   `;
 }
 
@@ -1308,7 +1386,9 @@ function renderDay(){
       </span>
       ${started
         ? '<button class="btn btn--primary" onclick="finishSession()">Finish</button>'
-        : '<button class="btn btn--primary" onclick="startSession()">Start session</button>'}
+        : (day.exercises.length
+            ? '<button class="btn btn--primary" onclick="startSession()">Start session</button>'
+            : '<button class="btn btn--ghost" disabled>Add exercises first</button>')}
     </div>
 
     <div class="ex-list">${exCards}</div>
