@@ -147,6 +147,14 @@
   .ex-head__name{ font-size:16px; font-weight:700; }
   .ex-head__sub{ display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap; }
   .pill{ font-size:11px; color:var(--text-dim); background:var(--bg-raised-2); border:1px solid var(--line); border-radius:99px; padding:3px 9px; font-family:var(--font-mono); }
+  .pill--variant{ color:var(--accent); border-color:var(--accent); }
+  .variant-row{ display:flex; align-items:center; gap:6px; margin-top:2px; touch-action:pan-y; }
+  .variant-chev{ font-size:16px; line-height:1; color:var(--text-dim); padding:2px 6px; user-select:none; }
+  .variant-dots{ display:flex; align-items:center; gap:4px; }
+  .variant-dot{ width:5px; height:5px; border-radius:50%; background:var(--line); }
+  .variant-dot.active{ background:var(--accent); }
+  .variant-row--locked{ opacity:.7; }
+  .variant-lock-hint{ font-size:10.5px; color:var(--text-faint); font-family:var(--font-mono); }
   .badge-fail{ font-size:10px; color:var(--danger); background:var(--danger-soft); border:1px solid rgba(255,77,77,0.35); border-radius:99px; padding:3px 8px; text-transform:uppercase; letter-spacing:0.06em; font-weight:700; }
   .ex-head__chev{ color:var(--text-faint); font-size:18px; flex-shrink:0; transition:transform .15s ease; }
   .ex-head__chev.open{ transform:rotate(180deg); }
@@ -279,7 +287,10 @@ const PLAN_SEED = {
   ]},
   wednesday:{ name:'Wednesday', title:'Legs', duration:'50–60 min', exercises:[
     { id:'leg-ext',   name:'Leg Extension',                rest:60,  sets:3, failure:true  },
-    { id:'squat-bss', name:'Squat / Bulgarian Split Squat', rest:180, sets:3, failure:false },
+    { groupId:'legs-squat-variant', activeIndex:0, variants:[
+        { id:'legday-bulgarian', name:'Bulgarian Split Squat', rest:120, sets:3, failure:false, reps:'8–12' },
+        { id:'legday-squat',     name:'Squat',                 rest:180, sets:3, failure:false, reps:'5–8'  },
+      ]},
     { id:'rdl',       name:'Romanian Deadlift',             rest:120, sets:3, failure:false },
     { id:'calves',    name:'Calf Raise',                    rest:60,  sets:3, failure:true  },
     { id:'lying-curl',name:'Lying Leg Curl',                rest:75,  sets:3, failure:true  },
@@ -488,6 +499,41 @@ function prettyDate(str){
   return d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
 }
 function getSetCount(ex){ return state.setCounts[ex.id] || ex.sets; }
+/* ---- exercise "slots": a slot in day.exercises is either a plain exercise
+   object, or a variant group { groupId, activeIndex, variants:[ex,ex,...] }
+   that the swipe UI lets you switch between. Everything below resolves a
+   slot down to whichever exercise is currently "active" in it. ---- */
+function activeExercise(slot){ return slot.variants ? slot.variants[slot.activeIndex || 0] : slot; }
+function slotKey(slot){ return slot.groupId || slot.id; }
+function resolvedDayExercises(dayKey){ return state.plan[dayKey].exercises.map(activeExercise); }
+function findPlanExercise(dayKey, exId){
+  const day = state.plan[dayKey];
+  if(!day) return null;
+  for(const slot of day.exercises){
+    if(slot.variants){
+      const v = slot.variants.find(v=>v.id===exId);
+      if(v) return v;
+    } else if(slot.id === exId) return slot;
+  }
+  return null;
+}
+// One-time migration: an existing saved plan (from before variant groups existed)
+// still has the old merged "Squat / Bulgarian Split Squat" entry under id
+// 'squat-bss'. Swap it in place for the new swipeable group, wherever the user
+// has it positioned, without touching anything else they've customized. Safe
+// to call every load — no-ops once already migrated.
+function migrateLegacySquatBssSlot(){
+  const day = state.plan.wednesday;
+  if(!day) return;
+  const idx = day.exercises.findIndex(e => e.id === 'squat-bss');
+  if(idx === -1) return;
+  day.exercises[idx] = {
+    groupId:'legs-squat-variant', activeIndex:0, variants:[
+      { id:'legday-bulgarian', name:'Bulgarian Split Squat', rest:120, sets:3, failure:false, reps:'8–12' },
+      { id:'legday-squat',     name:'Squat',                 rest:180, sets:3, failure:false, reps:'5–8'  },
+    ]
+  };
+}
 function historicalMax(dayKey, exId){
   const hist = state.history[dayKey] || [];
   let max = 0;
@@ -602,6 +648,7 @@ async function init(){
   // (like new ones introduced after your last save) show up even for a
   // returning device, while every day you've already customized keeps your edits.
   state.plan = Object.assign(JSON.parse(JSON.stringify(PLAN_SEED)), savedPlan || {});
+  migrateLegacySquatBssSlot(); // one-time: old flat "Squat / Bulgarian Split Squat" entry -> swipeable variant group
   await setJSON('workout-plan', state.plan);
   for(const dk of ALL_DAY_KEYS){
     state.history[dk] = await getJSON('history-'+dk, []);
@@ -731,11 +778,10 @@ function notifyRestOver(label){
 
 /* ================= SESSION MGMT ================= */
 function emptySession(dayKey){
-  const day = state.plan[dayKey];
   return {
     day: dayKey,
     startedAt: null,
-    exercises: day.exercises.map(ex => ({
+    exercises: resolvedDayExercises(dayKey).map(ex => ({
       id: ex.id,
       sets: Array.from({length:getSetCount(ex)}, () => ({ weight:'', reps:'', done:false }))
     }))
@@ -914,14 +960,14 @@ function toggleSetDone(exId, idx){
   ex.sets[idx].done = !wasDone;
   persistSession();
   if(!wasDone){
-    const planEx = state.plan[state.day].exercises.find(e=>e.id===exId);
+    const planEx = findPlanExercise(state.day, exId);
     startRestTimer(planEx.rest, planEx.name); // this already renders — don't render again below
   } else {
     render();
   }
 }
 function changeSetCount(exId, delta){
-  const planEx = state.plan[state.day].exercises.find(e=>e.id===exId);
+  const planEx = findPlanExercise(state.day, exId);
   const ex = state.session.exercises.find(e=>e.id===exId);
   const next = Math.max(1, Math.min(8, ex.sets.length + delta));
   if(next === ex.sets.length) return;
@@ -956,7 +1002,7 @@ function toggleEditPlan(){
 }
 function moveExercise(dayKey, exId, dir){
   const list = state.plan[dayKey].exercises;
-  const idx = list.findIndex(e=>e.id===exId);
+  const idx = list.findIndex(e=>e.id===exId || e.groupId===exId);
   const newIdx = idx + dir;
   if(idx === -1 || newIdx < 0 || newIdx >= list.length) return;
   [list[idx], list[newIdx]] = [list[newIdx], list[idx]];
@@ -967,15 +1013,42 @@ function moveExercise(dayKey, exId, dir){
 function removeExercise(dayKey, exId){
   const list = state.plan[dayKey].exercises;
   if(list.length <= 1){ window.alert('A day needs at least one exercise.'); return; }
-  const ex = list.find(e=>e.id===exId);
-  if(!ex) return;
-  if(!window.confirm('Remove "' + ex.name + '" from ' + state.plan[dayKey].name + '?')) return;
-  state.plan[dayKey].exercises = list.filter(e=>e.id!==exId);
-  delete state.setCounts[exId];
+  const slot = list.find(e=>e.id===exId || e.groupId===exId);
+  if(!slot) return;
+  const label = activeExercise(slot).name;
+  if(!window.confirm('Remove "' + label + '" from ' + state.plan[dayKey].name + '?')) return;
+  state.plan[dayKey].exercises = list.filter(e=>e!==slot);
+  const idsToClear = slot.variants ? slot.variants.map(v=>v.id) : [slot.id];
+  idsToClear.forEach(id=> delete state.setCounts[id]);
   setJSON('setcounts', state.setCounts);
   persistPlan();
   state.session = emptySession(dayKey);
   render();
+}
+function cycleVariant(e, groupId, dir){
+  if(e && e.stopPropagation) e.stopPropagation();
+  if(state.session && state.session.startedAt) return; // locked once the session's running
+  const slot = (state.plan[state.day].exercises || []).find(s => s.groupId === groupId);
+  if(!slot || !slot.variants) return;
+  const n = slot.variants.length;
+  slot.activeIndex = ((slot.activeIndex || 0) + dir + n) % n;
+  persistPlan();
+  state.session = emptySession(state.day); // rebuild the draft to match the newly active variant
+  render();
+}
+let _swipeStartX = null, _swipeStartY = null;
+function variantTouchStart(e){
+  const t = e.changedTouches[0];
+  _swipeStartX = t.clientX; _swipeStartY = t.clientY;
+}
+function variantTouchEnd(e, groupId){
+  if(_swipeStartX === null) return;
+  e.stopPropagation();
+  const t = e.changedTouches[0];
+  const dx = t.clientX - _swipeStartX, dy = t.clientY - _swipeStartY;
+  _swipeStartX = null; _swipeStartY = null;
+  if(Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return; // too small / more vertical than horizontal — ignore
+  cycleVariant(null, groupId, dx < 0 ? 1 : -1); // swipe left -> next variant, swipe right -> previous
 }
 function addExercisePrompt(){
   state.addingExercise = true;
@@ -1054,7 +1127,7 @@ function computeStats(session){
   let totalSets = 0, volume = 0;
   const prs = [];
   session.exercises.forEach(ex=>{
-    const planEx = state.plan[session.day].exercises.find(e=>e.id===ex.id);
+    const planEx = findPlanExercise(session.day, ex.id);
     let exMax = 0;
     ex.sets.forEach(s=>{
       if(s.done && s.weight !== '' && s.reps !== ''){
@@ -1307,7 +1380,10 @@ function renderHome(){
 
 function renderEditList(dayKey){
   const day = state.plan[dayKey];
-  const rows = day.exercises.map((ex, i) => `
+  const rows = day.exercises.map((slot, i) => {
+    const ex = activeExercise(slot);
+    const key = slotKey(slot);
+    return `
     <div class="edit-row">
       <span class="edit-row__num">0${i+1}</span>
       <span class="edit-row__main">
@@ -1316,14 +1392,16 @@ function renderEditList(dayKey){
           <span class="pill">Rest ${fmtClock(ex.rest)}</span>
           ${ex.reps?`<span class="pill">${ex.reps}</span>`:''}
           ${ex.failure?'<span class="badge-fail">Failure</span>':''}
+          ${slot.variants?`<span class="pill pill--variant">${slot.variants.length} variants — swipe on the day screen</span>`:''}
         </span>
       </span>
       <span class="edit-row__controls">
-        <button class="edit-arrow" onclick="moveExercise('${dayKey}','${ex.id}',-1)" ${i===0?'disabled':''}>↑</button>
-        <button class="edit-arrow" onclick="moveExercise('${dayKey}','${ex.id}',1)" ${i===day.exercises.length-1?'disabled':''}>↓</button>
-        <button class="edit-remove" onclick="removeExercise('${dayKey}','${ex.id}')">✕</button>
+        <button class="edit-arrow" onclick="moveExercise('${dayKey}','${key}',-1)" ${i===0?'disabled':''}>↑</button>
+        <button class="edit-arrow" onclick="moveExercise('${dayKey}','${key}',1)" ${i===day.exercises.length-1?'disabled':''}>↓</button>
+        <button class="edit-remove" onclick="removeExercise('${dayKey}','${key}')">✕</button>
       </span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   const addForm = state.addingExercise ? `
     <div class="add-ex-form">
@@ -1372,7 +1450,8 @@ function renderDay(){
     `;
   }
 
-  const exCards = day.exercises.map((ex, i)=>{
+  const exCards = day.exercises.map((slot, i)=>{
+    const ex = activeExercise(slot);
     const sessEx = session.exercises.find(e=>e.id===ex.id);
     const last = lastSessionFor(dk, ex.id);
     const allDone = exerciseAllDone(session, ex.id);
@@ -1381,6 +1460,20 @@ function renderDay(){
     const isCollapsed = override === undefined ? allDone : override;
 
     const lastStr = last ? last.sets.map(s=> (s.weight||'–')+'×'+(s.reps||'–')).join(', ') : 'First time logging this';
+
+    // Variant switch (swipe) UI — only present on slots with alternates (e.g. Squat / Bulgarian Split Squat)
+    const variantHtml = (()=>{
+      if(!slot.variants) return '';
+      const dots = slot.variants.map((v,vi)=> `<span class="variant-dot ${vi===(slot.activeIndex||0)?'active':''}"></span>`).join('');
+      if(started){
+        return `<span class="variant-row variant-row--locked"><span class="variant-dots">${dots}</span><span class="variant-lock-hint">locked for this session</span></span>`;
+      }
+      return `<span class="variant-row" ontouchstart="variantTouchStart(event)" ontouchend="variantTouchEnd(event,'${slot.groupId}')">
+        <span class="variant-chev" onclick="cycleVariant(event,'${slot.groupId}',-1)">‹</span>
+        <span class="variant-dots">${dots}</span>
+        <span class="variant-chev" onclick="cycleVariant(event,'${slot.groupId}',1)">›</span>
+      </span>`;
+    })();
 
     if(isCollapsed){
       const doneStr = allDone
@@ -1392,6 +1485,7 @@ function renderDay(){
             <span class="ex-head__num">EX 0${i+1}</span>
             <span class="ex-head__main">
               <span class="ex-head__name">${ex.name}</span>
+              ${variantHtml}
             </span>
             <span class="ex-head__check ${allDone?'complete':''}">${allDone?'✓':doneCount}</span>
             <span class="ex-head__chev">⌄</span>
@@ -1436,6 +1530,7 @@ function renderDay(){
           <span class="ex-head__num">EX 0${i+1}</span>
           <span class="ex-head__main">
             <span class="ex-head__name">${ex.name}</span>
+            ${variantHtml}
             <span class="ex-head__sub">
               <span class="pill">Rest ${fmtClock(ex.rest)}</span>
               ${ex.reps?`<span class="pill">${ex.reps}</span>`:''}
