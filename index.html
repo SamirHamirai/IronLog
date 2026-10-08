@@ -148,13 +148,12 @@
   .ex-head__sub{ display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap; }
   .pill{ font-size:11px; color:var(--text-dim); background:var(--bg-raised-2); border:1px solid var(--line); border-radius:99px; padding:3px 9px; font-family:var(--font-mono); }
   .pill--variant{ color:var(--accent); border-color:var(--accent); }
-  .variant-row{ display:flex; align-items:center; gap:6px; margin-top:2px; touch-action:pan-y; }
-  .variant-chev{ font-size:16px; line-height:1; color:var(--text-dim); padding:2px 6px; user-select:none; }
+  .variant-row{ display:flex; align-items:center; gap:4px; margin-top:2px; }
+  .variant-chev{ font-size:22px; line-height:1; color:var(--text); padding:6px 14px; margin:-6px 0; user-select:none; cursor:pointer; border-radius:8px; }
+  .variant-chev:active{ background:var(--bg-raised-2); }
   .variant-dots{ display:flex; align-items:center; gap:4px; }
   .variant-dot{ width:5px; height:5px; border-radius:50%; background:var(--line); }
   .variant-dot.active{ background:var(--accent); }
-  .variant-row--locked{ opacity:.7; }
-  .variant-lock-hint{ font-size:10.5px; color:var(--text-faint); font-family:var(--font-mono); }
   .badge-fail{ font-size:10px; color:var(--danger); background:var(--danger-soft); border:1px solid rgba(255,77,77,0.35); border-radius:99px; padding:3px 8px; text-transform:uppercase; letter-spacing:0.06em; font-weight:700; }
   .ex-head__chev{ color:var(--text-faint); font-size:18px; flex-shrink:0; transition:transform .15s ease; }
   .ex-head__chev.open{ transform:rotate(180deg); }
@@ -251,10 +250,17 @@
   .edit-row__num{ font-family:var(--font-mono); font-size:11.5px; color:var(--text-faint); flex-shrink:0; }
   .edit-row__main{ flex:1; min-width:0; }
   .edit-row__name{ font-size:14.5px; font-weight:700; display:block; }
-  .edit-row__sub{ display:flex; gap:6px; margin-top:4px; }
+  .edit-row__sub{ display:flex; gap:6px; margin-top:4px; flex-wrap:wrap; }
   .edit-row__controls{ display:flex; gap:6px; flex-shrink:0; }
   .edit-arrow, .edit-remove{ width:32px; height:32px; border-radius:9px; background:var(--bg-raised-2); border:1px solid var(--line); color:var(--text-dim); font-size:14px; display:flex; align-items:center; justify-content:center; }
   .edit-arrow:disabled{ opacity:0.3; }
+  .edit-pencil.active{ color:var(--accent); border-color:var(--accent); }
+  .edit-row.is-editing{ border-color:var(--accent); }
+  .edit-ex-form{ margin-top:6px; background:var(--bg-raised-2); border:1px solid var(--line); border-radius:var(--radius-md); padding:12px; display:flex; flex-direction:column; gap:12px; }
+  .edit-ex-block{ display:flex; flex-direction:column; gap:8px; }
+  .edit-ex-block + .edit-ex-block{ border-top:1px solid var(--line); padding-top:12px; }
+  .edit-ex-variant{ font-family:var(--font-mono); font-size:11px; color:var(--accent); letter-spacing:.06em; text-transform:uppercase; }
+  .edit-ex-label{ font-size:11px; color:var(--text-faint); font-family:var(--font-mono); letter-spacing:.06em; text-transform:uppercase; margin-bottom:-4px; }
   .edit-remove{ color:var(--danger); }
   .add-ex-trigger{ width:calc(100% - 28px); margin:12px 14px 20px; padding:13px; border-radius:var(--radius-md); background:var(--bg-raised-2); border:1px dashed var(--line); color:var(--text-dim); font-size:13px; font-weight:600; text-align:center; }
   .add-ex-form{ margin:12px 14px 20px; background:var(--bg-raised); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:10px; }
@@ -463,6 +469,7 @@ const state = {
   chartOpen: {},         // exerciseId -> bool (progress chart panel visible)
   chartMetric: {},       // exerciseId -> 'weight' | 'volume'
   editingPlan: false,    // currently editing this day's exercise list
+  editingExKey: null,    // slotKey of the exercise whose details (name/reps/rest) are being edited
   addingExercise: false, // add-exercise form open within edit mode
   addingVariantFor: null, // slotKey whose inline "add exercise to this workout" form is open
   showHistory: false,
@@ -503,11 +510,31 @@ function prettyDate(str){
 function getSetCount(ex){ return state.setCounts[ex.id] || ex.sets; }
 /* ---- exercise "slots": a slot in day.exercises is either a plain exercise
    object, or a variant group { groupId, activeIndex, variants:[ex,ex,...] }
-   that the swipe UI lets you switch between. Everything below resolves a
+   that the ‹ › arrows on the card let you switch between. Everything below resolves a
    slot down to whichever exercise is currently "active" in it. ---- */
 function activeExercise(slot){ return slot.variants ? slot.variants[slot.activeIndex || 0] : slot; }
 function slotKey(slot){ return slot.groupId || slot.id; }
 function resolvedDayExercises(dayKey){ return state.plan[dayKey].exercises.map(activeExercise); }
+// every exercise in the day, including the not-currently-selected variants
+function allDayExercises(dayKey){
+  return state.plan[dayKey].exercises.flatMap(slot => slot.variants ? slot.variants : [slot]);
+}
+function blankSessionEntry(ex){
+  return { id: ex.id, sets: Array.from({length:getSetCount(ex)}, () => ({ weight:'', reps:'', done:false })) };
+}
+// A session keeps a separate set-log for EVERY variant in a slot, so you can flip
+// between them at any point (even mid-workout) without losing what you've logged.
+// Adds any missing entries to a session (old saved drafts only had the active one).
+function ensureSessionCoverage(session, dayKey){
+  if(!session) return;
+  allDayExercises(dayKey).forEach(ex=>{
+    if(!session.exercises.some(e=>e.id===ex.id)) session.exercises.push(blankSessionEntry(ex));
+  });
+}
+// has the user actually logged anything for this session entry?
+function entryHasData(entry){
+  return entry.sets.some(s => s.done || s.weight !== '' || s.reps !== '');
+}
 function findPlanExercise(dayKey, exId){
   const day = state.plan[dayKey];
   if(!day) return null;
@@ -550,10 +577,11 @@ function historicalMax(dayKey, exId){
 }
 function lastSessionFor(dayKey, exId){
   const hist = state.history[dayKey] || [];
-  if(!hist.length) return null;
-  const last = hist[hist.length-1];
-  const ex = last.exercises.find(e=>e.id===exId);
-  return ex || null;
+  for(let i = hist.length-1; i >= 0; i--){
+    const ex = hist[i].exercises.find(e=>e.id===exId);
+    if(ex && ex.sets.length) return ex;
+  }
+  return null;
 }
 function exerciseAllDone(sess, exId){
   const ex = sess.exercises.find(e=>e.id===exId);
@@ -783,10 +811,7 @@ function emptySession(dayKey){
   return {
     day: dayKey,
     startedAt: null,
-    exercises: resolvedDayExercises(dayKey).map(ex => ({
-      id: ex.id,
-      sets: Array.from({length:getSetCount(ex)}, () => ({ weight:'', reps:'', done:false }))
-    }))
+    exercises: allDayExercises(dayKey).map(blankSessionEntry)
   };
 }
 async function persistSession(){
@@ -802,10 +827,12 @@ async function openDay(dayKey){
   state.chartOpen = {};
   state.chartMetric = {};
   state.editingPlan = false;
+  state.editingExKey = null;
   state.addingExercise = false;
   state.addingVariantFor = null;
   const draft = await getJSON('inprogress-'+dayKey, null);
   state.session = draft || emptySession(dayKey);
+  ensureSessionCoverage(state.session, dayKey);
   if(state.session.startedAt) startStopwatch();
   render();
   window.scrollTo(0, 0);
@@ -963,11 +990,27 @@ function toggleSetDone(exId, idx){
   ex.sets[idx].done = !wasDone;
   persistSession();
   if(!wasDone){
-    const planEx = findPlanExercise(state.day, exId);
-    startRestTimer(planEx.rest, planEx.name); // this already renders — don't render again below
+    if(isLastSetOfWorkout(exId, idx)){
+      // Nothing left to rest for — skip the rest timer (and dismiss any that's
+      // still counting down). The session stopwatch keeps running until you Finish.
+      stopRestTimer(true);
+      render();
+    } else {
+      const planEx = findPlanExercise(state.day, exId);
+      startRestTimer(planEx.rest, planEx.name); // this already renders — don't render again below
+    }
   } else {
     render();
   }
+}
+// True when the set just ticked is the last set of the LAST exercise in the day's list
+// (the exercise currently selected, if that slot has variants).
+function isLastSetOfWorkout(exId, idx){
+  const list = state.plan[state.day].exercises;
+  const lastSlot = list[list.length - 1];
+  if(!lastSlot || activeExercise(lastSlot).id !== exId) return false;
+  const ex = state.session.exercises.find(e=>e.id===exId);
+  return idx === ex.sets.length - 1 || ex.sets.every(s=>s.done);
 }
 function changeSetCount(exId, delta){
   const planEx = findPlanExercise(state.day, exId);
@@ -1000,6 +1043,7 @@ function copyLastSession(exId){
 /* ---- plan editing: add / remove / reorder exercises for a day ---- */
 function toggleEditPlan(){
   state.editingPlan = !state.editingPlan;
+  state.editingExKey = null;
   state.addingExercise = false;
   state.addingVariantFor = null;
   render();
@@ -1022,6 +1066,7 @@ function removeExercise(dayKey, exId){
   const label = activeExercise(slot).name;
   if(!window.confirm('Remove "' + label + '" from ' + state.plan[dayKey].name + '?')) return;
   state.plan[dayKey].exercises = list.filter(e=>e!==slot);
+  if(state.editingExKey === slotKey(slot)) state.editingExKey = null;
   const idsToClear = slot.variants ? slot.variants.map(v=>v.id) : [slot.id];
   idsToClear.forEach(id=> delete state.setCounts[id]);
   setJSON('setcounts', state.setCounts);
@@ -1029,34 +1074,84 @@ function removeExercise(dayKey, exId){
   state.session = emptySession(dayKey);
   render();
 }
+/* ---- edit an existing exercise's details (name / target reps / rest / failure) ---- */
+const REST_CHOICES = [30,45,60,75,90,105,120,150,180,210,240,300];
+function escAttr(str){
+  return String(str == null ? '' : str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function openEditExercise(key){
+  state.editingExKey = (state.editingExKey === key) ? null : key;
+  state.addingExercise = false;
+  render();
+}
+function cancelEditExercise(){
+  state.editingExKey = null;
+  render();
+}
+function saveEditExercise(key){
+  const list = state.plan[state.day].exercises;
+  const slot = list.find(sl => slotKey(sl) === key);
+  if(!slot) return;
+  const variants = slot.variants ? slot.variants : [slot];
+  // validate every name first so a half-saved edit never happens
+  for(let i=0; i<variants.length; i++){
+    const nameEl = document.getElementById('editName-'+i);
+    if(!nameEl || !nameEl.value.trim()){ if(nameEl) nameEl.focus(); return; }
+  }
+  variants.forEach((v, i)=>{
+    v.name = document.getElementById('editName-'+i).value.trim();
+    const reps = document.getElementById('editReps-'+i).value.trim();
+    if(reps) v.reps = reps; else delete v.reps;
+    v.rest = Math.max(10, parseInt(document.getElementById('editRest-'+i).value, 10) || v.rest || 90);
+    v.failure = !!document.getElementById('editFail-'+i).checked;
+  });
+  persistPlan();
+  state.editingExKey = null;
+  render();
+}
+function renderEditExerciseForm(slot, key){
+  const variants = slot.variants ? slot.variants : [slot];
+  const blocks = variants.map((v, i)=>{
+    const choices = REST_CHOICES.includes(v.rest) ? REST_CHOICES : [...REST_CHOICES, v.rest].sort((a,b)=>a-b);
+    return `
+      <div class="edit-ex-block">
+        ${slot.variants ? `<div class="edit-ex-variant">Exercise ${i+1} of ${variants.length}</div>` : ''}
+        <label class="edit-ex-label" for="editName-${i}">Name</label>
+        <input id="editName-${i}" type="text" class="add-ex-input" value="${escAttr(v.name)}">
+        <label class="edit-ex-label" for="editReps-${i}">Target reps</label>
+        <input id="editReps-${i}" type="text" class="add-ex-input" placeholder="e.g. 8–12 (optional)" value="${escAttr(v.reps || '')}">
+        <div class="add-ex-row2">
+          <label class="edit-ex-label" for="editRest-${i}" style="margin:0;">Rest</label>
+          <select id="editRest-${i}" class="add-ex-select">
+            ${choices.map(sec=>`<option value="${sec}" ${sec===v.rest?'selected':''}>${fmtClock(sec)}</option>`).join('')}
+          </select>
+          <label class="add-ex-check"><input id="editFail-${i}" type="checkbox" ${v.failure?'checked':''}> Last set to failure</label>
+        </div>
+      </div>`;
+  }).join('');
+  return `
+    <div class="edit-ex-form">
+      ${blocks}
+      <div class="add-ex-actions">
+        <button class="btn btn--ghost btn--sm" onclick="cancelEditExercise()">Cancel</button>
+        <button class="btn btn--primary btn--sm" onclick="saveEditExercise('${key}')">Save changes</button>
+      </div>
+    </div>`;
+}
 function cycleVariant(e, groupId, dir){
   if(e && e.stopPropagation) e.stopPropagation();
-  if(state.session && state.session.startedAt) return; // locked once the session's running
   const slot = (state.plan[state.day].exercises || []).find(s => s.groupId === groupId);
   if(!slot || !slot.variants) return;
   const n = slot.variants.length;
   slot.activeIndex = ((slot.activeIndex || 0) + dir + n) % n;
   persistPlan();
-  state.session = emptySession(state.day); // rebuild the draft to match the newly active variant
+  // Works any time, including mid-workout: the session already holds a separate
+  // set-log for every variant, so nothing logged on the other one is touched.
+  ensureSessionCoverage(state.session, state.day);
   render();
 }
-let _swipeStartX = null, _swipeStartY = null;
-function variantTouchStart(e){
-  const t = e.changedTouches[0];
-  _swipeStartX = t.clientX; _swipeStartY = t.clientY;
-}
-function variantTouchEnd(e, groupId){
-  if(_swipeStartX === null) return;
-  e.stopPropagation();
-  const t = e.changedTouches[0];
-  const dx = t.clientX - _swipeStartX, dy = t.clientY - _swipeStartY;
-  _swipeStartX = null; _swipeStartY = null;
-  if(Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return; // too small / more vertical than horizontal — ignore
-  cycleVariant(null, groupId, dx < 0 ? 1 : -1); // swipe left -> next variant, swipe right -> previous
-}
-/* ---- add another exercise to an existing workout slot (swipe between them) ---- */
+/* ---- add another exercise to an existing workout slot (switch between them with the arrows) ---- */
 function openAddVariant(key){
-  if(state.session && state.session.startedAt) return; // locked once the session's running
   state.addingVariantFor = key;
   render();
   setTimeout(()=>{ const el = document.getElementById('newVarName'); if(el) el.focus(); }, 0);
@@ -1066,7 +1161,6 @@ function cancelAddVariant(){
   render();
 }
 function confirmAddVariant(key){
-  if(state.session && state.session.startedAt) return;
   const nameInput = document.getElementById('newVarName');
   const name = (nameInput.value || '').trim();
   if(!name){ nameInput.focus(); return; }
@@ -1089,7 +1183,8 @@ function confirmAddVariant(key){
   slot.activeIndex = slot.variants.length - 1; // jump straight to the exercise you just added
   persistPlan();
   state.addingVariantFor = null;
-  state.session = emptySession(state.day);
+  ensureSessionCoverage(state.session, state.day);
+  persistSession();
   render();
 }
 function addExercisePrompt(){
@@ -1204,7 +1299,7 @@ async function confirmFinish(save){
       exercises: state.session.exercises.map(ex=>({
         id: ex.id,
         sets: ex.sets.filter(s=> s.weight !== '' && s.reps !== '').map(s=>({weight:s.weight, reps:s.reps}))
-      }))
+      })).filter(ex => ex.sets.length) // skip variants/exercises nothing was logged on
     };
     const list = state.history[state.day] || [];
     list.push(entry);
@@ -1425,8 +1520,10 @@ function renderEditList(dayKey){
   const rows = day.exercises.map((slot, i) => {
     const ex = activeExercise(slot);
     const key = slotKey(slot);
+    const isEditing = state.editingExKey === key;
     return `
-    <div class="edit-row">
+    <div class="edit-item">
+    <div class="edit-row ${isEditing?'is-editing':''}">
       <span class="edit-row__num">0${i+1}</span>
       <span class="edit-row__main">
         <span class="edit-row__name">${ex.name}</span>
@@ -1434,14 +1531,17 @@ function renderEditList(dayKey){
           <span class="pill">Rest ${fmtClock(ex.rest)}</span>
           ${ex.reps?`<span class="pill">${ex.reps}</span>`:''}
           ${ex.failure?'<span class="badge-fail">Failure</span>':''}
-          ${slot.variants?`<span class="pill pill--variant">${slot.variants.length} variants — swipe on the day screen</span>`:''}
+          ${slot.variants?`<span class="pill pill--variant">${slot.variants.length} variants — switch with the ‹ › arrows</span>`:''}
         </span>
       </span>
       <span class="edit-row__controls">
+        <button class="edit-arrow edit-pencil ${isEditing?'active':''}" onclick="openEditExercise('${key}')" aria-label="Edit details">✎</button>
         <button class="edit-arrow" onclick="moveExercise('${dayKey}','${key}',-1)" ${i===0?'disabled':''}>↑</button>
         <button class="edit-arrow" onclick="moveExercise('${dayKey}','${key}',1)" ${i===day.exercises.length-1?'disabled':''}>↓</button>
         <button class="edit-remove" onclick="removeExercise('${dayKey}','${key}')">✕</button>
       </span>
+    </div>
+    ${isEditing ? renderEditExerciseForm(slot, key) : ''}
     </div>`;
   }).join('');
 
@@ -1466,7 +1566,7 @@ function renderEditList(dayKey){
     </div>` : `<button class="add-ex-trigger" onclick="addExercisePrompt()">+ Add exercise</button>`;
 
   return `
-    <div class="edit-hint">Reorder, remove, or add exercises for ${day.name}. Tap Done when finished.</div>
+    <div class="edit-hint">Tap ✎ to edit an exercise's name, reps or rest. Reorder, remove or add exercises for ${day.name}. Tap Done when finished.</div>
     <div class="edit-list">${rows}</div>
     ${addForm}
   `;
@@ -1503,28 +1603,24 @@ function renderDay(){
 
     const lastStr = last ? last.sets.map(s=> (s.weight||'–')+'×'+(s.reps||'–')).join(', ') : 'First time logging this';
 
-    // Variant switch (swipe) UI — only present on slots with alternates (e.g. Squat / Bulgarian Split Squat)
+    // Variant switch (‹ › arrows) — only present on slots with alternates (e.g. Squat / Bulgarian Split Squat)
     const variantHtml = (()=>{
       if(!slot.variants) return '';
       const dots = slot.variants.map((v,vi)=> `<span class="variant-dot ${vi===(slot.activeIndex||0)?'active':''}"></span>`).join('');
-      if(started){
-        return `<span class="variant-row variant-row--locked"><span class="variant-dots">${dots}</span><span class="variant-lock-hint">locked for this session</span></span>`;
-      }
-      return `<span class="variant-row" ontouchstart="variantTouchStart(event)" ontouchend="variantTouchEnd(event,'${slot.groupId}')">
+      return `<span class="variant-row">
         <span class="variant-chev" onclick="cycleVariant(event,'${slot.groupId}',-1)">‹</span>
         <span class="variant-dots">${dots}</span>
         <span class="variant-chev" onclick="cycleVariant(event,'${slot.groupId}',1)">›</span>
       </span>`;
     })();
 
-    const swipeAttrs = (slot.variants && !started) ? ` ontouchstart="variantTouchStart(event)" ontouchend="variantTouchEnd(event,'${slot.groupId}')"` : '';
     if(isCollapsed){
       const doneStr = allDone
         ? sessEx.sets.map(s=>(s.weight||'–')+'kg×'+(s.reps||'–')).join(', ')
         : `${doneCount} of ${sessEx.sets.length} sets logged`;
       return `
         <div class="ex-card">
-          <button class="ex-head" onclick="toggleExpand('${ex.id}', true)"${swipeAttrs}>
+          <button class="ex-head" onclick="toggleExpand('${ex.id}', true)">
             <span class="ex-head__num">EX 0${i+1}</span>
             <span class="ex-head__main">
               <span class="ex-head__name">${ex.name}</span>
@@ -1569,7 +1665,7 @@ function renderDay(){
 
     return `
       <div class="ex-card">
-        <button class="ex-head" onclick="toggleExpand('${ex.id}', false)"${swipeAttrs}>
+        <button class="ex-head" onclick="toggleExpand('${ex.id}', false)">
           <span class="ex-head__num">EX 0${i+1}</span>
           <span class="ex-head__main">
             <span class="ex-head__name">${ex.name}</span>
@@ -1593,9 +1689,9 @@ function renderDay(){
           <div class="ex-setctrl">
             <button class="linklike" onclick="changeSetCount('${ex.id}',1)">+ Add set</button>
             <button class="linklike" onclick="changeSetCount('${ex.id}',-1)">Remove set</button>
-            ${!started ? `<button class="linklike" onclick="openAddVariant('${slotKey(slot)}')">+ Add exercise</button>` : ''}
+            <button class="linklike" onclick="openAddVariant('${slotKey(slot)}')">+ Add exercise</button>
           </div>
-          ${(!started && state.addingVariantFor === slotKey(slot)) ? `
+          ${(state.addingVariantFor === slotKey(slot)) ? `
           <div class="variant-add-form">
             <input id="newVarName" type="text" placeholder="Exercise name (e.g. Squat)" class="add-ex-input">
             <input id="newVarReps" type="text" placeholder="Target reps, e.g. 8–12 (optional)" class="add-ex-input">
